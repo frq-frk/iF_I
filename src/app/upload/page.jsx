@@ -3,7 +3,7 @@
 import { useAuth } from '../AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { useFormState } from 'react-dom';
+import { useActionState } from 'react';
 import { uploadVideo } from '../actions';
 
 const initialState = {
@@ -13,7 +13,7 @@ const initialState = {
 const UploadPage = () => {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [state, formAction] = useFormState(uploadVideo, initialState);
+  const [state, formAction] = useActionState(uploadVideo, initialState);
 
   useEffect(() => {
     if (!loading && !user) {

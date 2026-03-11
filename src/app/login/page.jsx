@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link';
-import { useFormState } from 'react-dom';
+import { useActionState } from 'react';
 import { login } from '../actions';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -12,7 +12,7 @@ const initialState = {
 };
 
 const LoginPage = () => {
-  const [state, formAction] = useFormState(login, initialState);
+  const [state, formAction] = useActionState(login, initialState);
   const router = useRouter();
 
   useEffect(() => {
@@ -55,7 +55,7 @@ const LoginPage = () => {
           {state.message && <p className="text-red-500 text-sm mt-2">{state.message}</p>}
         </form>
         <p className="text-center">
-          Don't have an account?{' '}
+          Don&apos;t have an account?{' '}
           <Link href="/signup" className="text-blue-400 hover:underline">
             Sign up
           </Link>

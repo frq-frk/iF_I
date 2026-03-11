@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link';
-import { useFormState } from 'react-dom';
+import { useActionState } from 'react';
 import { signup } from '../actions';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -12,7 +12,7 @@ const initialState = {
 };
 
 const SignupPage = () => {
-  const [state, formAction] = useFormState(signup, initialState);
+  const [state, formAction] = useActionState(signup, initialState);
   const router = useRouter();
 
   useEffect(() => {

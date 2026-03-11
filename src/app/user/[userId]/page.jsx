@@ -56,7 +56,7 @@ const UserProfilePage = ({ params }) => {
         </div>
       ) : (
         <div className="text-center py-16">
-          <p className="text-lg text-gray-400">This user hasn't uploaded any videos yet.</p>
+          <p className="text-lg text-gray-400">This user hasn&apos;t uploaded any videos yet.</p>
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 'use server'
 
-import { auth, db, storage } from '../lib/firebase/index.js';
+import { auth, db, storage } from '../lib/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
@@ -16,8 +16,7 @@ export async function signup(prevState, formData) {
 
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-    return { message: 'User created successfully', user };
+    return { message: 'User created successfully', user: { uid: userCredential.user.uid, email: userCredential.user.email } };
   } catch (error) {
     return { message: error.message };
   }
@@ -29,8 +28,7 @@ export async function login(prevState, formData) {
 
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-    return { message: 'Login successful', user };
+    return { message: 'Login successful', user: { uid: userCredential.user.uid, email: userCredential.user.email } };
   } catch (error) {
     return { message: error.message };
   }
@@ -62,7 +60,6 @@ export async function uploadVideo(prevState, formData) {
 
     return { message: 'Video uploaded successfully!' };
   } catch (error) {
-    console.error("Error uploading video: ", error);
     return { message: 'Failed to upload video.' };
   }
 }

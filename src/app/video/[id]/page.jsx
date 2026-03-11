@@ -15,8 +15,6 @@ const VideoPage = ({ params }) => {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           setVideo({ id: docSnap.id, ...docSnap.data() });
-        } else {
-          console.log("No such document!");
         }
       } catch (error) {
         console.error("Error fetching video:", error);
