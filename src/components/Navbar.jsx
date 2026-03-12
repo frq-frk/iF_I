@@ -1,13 +1,14 @@
 'use client'
 
 import Link from 'next/link';
-import { useAuth } from '../app/AuthContext';
+import { useAppSelector } from '../store/hooks';
+import { selectUser } from '../store/slices/authSlice';
 import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 
 const Navbar = () => {
-  const { user } = useAuth();
+  const user = useAppSelector(selectUser);
   const router = useRouter();
 
   const handleSignOut = async () => {

@@ -1,9 +1,9 @@
 'use client'
 
-import { useAuth } from '../AuthContext';
+import { useAppSelector } from '../../store/hooks';
+import { selectUser, selectAuthLoading } from '../../store/slices/authSlice';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-import { useActionState } from 'react';
+import { useEffect, useActionState } from 'react';
 import { uploadVideo } from '../actions';
 
 const initialState = {
@@ -11,7 +11,8 @@ const initialState = {
 };
 
 const UploadPage = () => {
-  const { user, loading } = useAuth();
+  const user = useAppSelector(selectUser);
+  const loading = useAppSelector(selectAuthLoading);
   const router = useRouter();
   const [state, formAction] = useActionState(uploadVideo, initialState);
 

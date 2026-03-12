@@ -1,13 +1,36 @@
 'use client'
 
+import { useEffect } from 'react'
+import { onAuthStateChanged } from 'firebase/auth'
+import { auth } from '../lib/firebase'
+import StoreProvider from '../store/StoreProvider'
+import { useAppDispatch } from '../store/hooks'
+import { setUser, clearUser } from '../store/slices/authSlice'
 import Navbar from '../components/Navbar'
-import { AuthProvider } from './AuthContext'
+
+function AuthSync() {
+  const dispatch = useAppDispatch();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        dispatch(setUser({ uid: user.uid, email: user.email }));
+      } else {
+        dispatch(clearUser());
+      }
+    });
+    return () => unsubscribe();
+  }, [dispatch]);
+
+  return null;
+}
 
 export default function Providers({ children }) {
   return (
-    <AuthProvider>
+    <StoreProvider>
+      <AuthSync />
       <Navbar />
       <main className="container mx-auto p-4">{children}</main>
-    </AuthProvider>
+    </StoreProvider>
   )
 }
