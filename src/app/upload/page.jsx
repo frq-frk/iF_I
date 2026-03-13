@@ -9,6 +9,7 @@ import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/fires
 import { storage, db } from '../../lib/firebase';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import LoadingOverlay from '../../components/LoadingOverlay';
 
 const UploadInner = () => {
   const user = useAppSelector(selectUser);
@@ -133,6 +134,7 @@ const UploadInner = () => {
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-6 py-12">
+      <LoadingOverlay visible={uploading} message={progress || 'Uploading...'} />
       <div className="w-full max-w-lg">
         <div className="text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600/10 border border-indigo-500/20">

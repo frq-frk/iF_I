@@ -7,6 +7,7 @@ import { auth, db } from '../../lib/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import LoadingOverlay from '../../components/LoadingOverlay';
 
 const SignupPage = () => {
   const [email, setEmail] = useState('');
@@ -62,6 +63,7 @@ const SignupPage = () => {
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-6 py-12">
+      <LoadingOverlay visible={loading} message="Creating account..." />
       <div className="w-full max-w-sm">
         <div className="text-center">
           <h1 className="text-2xl font-bold tracking-tight text-white">Create an account</h1>

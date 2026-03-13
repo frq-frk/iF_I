@@ -6,6 +6,7 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import LoadingOverlay from '../../components/LoadingOverlay';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -32,6 +33,7 @@ const LoginPage = () => {
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-6 py-12">
+      <LoadingOverlay visible={loading} message="Signing in..." />
       <div className="w-full max-w-sm">
         <div className="text-center">
           <h1 className="text-2xl font-bold tracking-tight text-white">Welcome back</h1>

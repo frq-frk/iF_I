@@ -7,6 +7,7 @@ import { useAppSelector } from '../../store/hooks';
 import { selectUser, selectAuthLoading } from '../../store/slices/authSlice';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import LoadingOverlay from '../../components/LoadingOverlay';
 
 const SettingsPage = () => {
   const user = useAppSelector(selectUser);
@@ -121,6 +122,7 @@ const SettingsPage = () => {
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-10">
+      <LoadingOverlay visible={saving} message="Saving settings..." />
       <div className="flex items-center gap-4">
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.04] border border-white/[0.06]">
           <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
