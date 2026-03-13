@@ -6,6 +6,7 @@ import { db } from '../../lib/firebase';
 import { useAppSelector } from '../../store/hooks';
 import { selectUser, selectAuthLoading } from '../../store/slices/authSlice';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 const SettingsPage = () => {
   const user = useAppSelector(selectUser);
@@ -27,7 +28,6 @@ const SettingsPage = () => {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -75,7 +75,7 @@ const SettingsPage = () => {
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
-    setMessage(null);
+
 
     try {
       await Promise.all([
@@ -88,10 +88,10 @@ const SettingsPage = () => {
         }, { merge: true }),
         setDoc(doc(db, 'settings', user.uid), settings, { merge: true }),
       ]);
-      setMessage({ type: 'success', text: 'Settings saved successfully.' });
+      toast.success('Settings saved successfully');
     } catch (error) {
       console.error('Error saving settings:', error);
-      setMessage({ type: 'error', text: 'Failed to save settings.' });
+      toast.error('Failed to save settings');
     } finally {
       setSaving(false);
     }
@@ -247,18 +247,6 @@ const SettingsPage = () => {
             ))}
           </div>
         </div>
-
-        {message && (
-          <div className={`mt-6 rounded-lg border px-4 py-3 ${
-            message.type === 'success'
-              ? 'border-emerald-500/20 bg-emerald-500/10'
-              : 'border-red-500/20 bg-red-500/10'
-          }`}>
-            <p className={`text-sm ${message.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
-              {message.text}
-            </p>
-          </div>
-        )}
 
         <button
           type="submit"

@@ -8,6 +8,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { storage, db } from '../../lib/firebase';
 import Link from 'next/link';
+import { toast } from 'sonner';
 
 const UploadInner = () => {
   const user = useAppSelector(selectUser);
@@ -16,7 +17,6 @@ const UploadInner = () => {
   const searchParams = useSearchParams();
   const contestId = searchParams.get('contestId');
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState(null);
   const [progress, setProgress] = useState('');
   const [contest, setContest] = useState(null);
 
@@ -36,7 +36,6 @@ const UploadInner = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(null);
     setUploading(true);
 
     const formData = new FormData(e.target);
@@ -47,7 +46,7 @@ const UploadInner = () => {
     const tags = formData.get('tags');
 
     if (!videoFile || videoFile.size === 0) {
-      setError('Please select a video file.');
+      toast.error('Please select a video file.');
       setUploading(false);
       return;
     }
@@ -100,10 +99,11 @@ const UploadInner = () => {
         });
       }
 
+      toast.success('Video uploaded successfully');
       router.push(contestId ? `/contest/${contestId}` : '/');
     } catch (err) {
       console.error('Upload failed:', err);
-      setError('Failed to upload video. Please try again.');
+      toast.error('Failed to upload video. Please try again.');
     } finally {
       setUploading(false);
       setProgress('');
@@ -249,12 +249,6 @@ const UploadInner = () => {
             />
             <p className="mt-1.5 text-xs text-slate-600">Separate tags with commas</p>
           </div>
-
-          {error && (
-            <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3">
-              <p className="text-sm text-red-400">{error}</p>
-            </div>
-          )}
 
           <button
             type="submit"
