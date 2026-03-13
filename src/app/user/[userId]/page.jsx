@@ -1,13 +1,13 @@
 'use client'
 
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { use, useEffect, useState } from 'react';
 import VideoCard from '../../../components/VideoCard';
 import Link from 'next/link';
 import { useAppSelector } from '../../../store/hooks';
 import { selectUser } from '../../../store/slices/authSlice';
-import { deleteVideo, toggleVideoVisibility } from '../../actions';
+import { deleteVideo, toggleVideoVisibility, followUser, unfollowUser } from '../../actions';
 
 function VideoCardSkeleton() {
   return (
@@ -25,36 +25,91 @@ function VideoCardSkeleton() {
   );
 }
 
+function ProfileSkeleton() {
+  return (
+    <div className="mx-auto max-w-7xl px-6 py-10">
+      <div className="flex items-center justify-between border-b border-white/[0.06] pb-8">
+        <div className="flex items-center gap-5">
+          <div className="h-16 w-16 rounded-2xl animate-pulse-soft bg-white/[0.06]" />
+          <div className="space-y-2">
+            <div className="h-5 w-32 rounded-lg animate-pulse-soft bg-white/[0.06]" />
+            <div className="h-3 w-48 rounded-lg animate-pulse-soft bg-white/[0.04]" />
+          </div>
+        </div>
+      </div>
+      <div className="mt-6 flex gap-6">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="h-4 w-20 rounded animate-pulse-soft bg-white/[0.04]" />
+        ))}
+      </div>
+      <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {[...Array(4)].map((_, i) => (
+          <VideoCardSkeleton key={i} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function formatDate(timestamp) {
+  if (!timestamp) return 'Unknown';
+  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+  return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
 const UserProfilePage = ({ params: paramsPromise }) => {
   const params = use(paramsPromise);
   const [videos, setVideos] = useState([]);
+  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
+  const [followLoading, setFollowLoading] = useState(false);
   const currentUser = useAppSelector(selectUser);
   const isOwner = currentUser?.uid === params.userId;
+  const isFollowing = profile?.followers?.includes(currentUser?.uid);
 
   useEffect(() => {
     let cancelled = false;
-    const fetchUserVideos = async () => {
+
+    const fetchData = async () => {
       try {
-        const videosCollection = collection(db, 'videos');
-        const q = query(videosCollection, where("authorId", "==", params.userId));
-        const querySnapshot = await getDocs(q);
+        const [videosSnap, profileSnap] = await Promise.all([
+          getDocs(query(collection(db, 'videos'), where("authorId", "==", params.userId))),
+          getDoc(doc(db, 'users', params.userId)),
+        ]);
+
         if (cancelled) return;
-        const userVideos = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setVideos(userVideos);
+
+        setVideos(videosSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+        if (profileSnap.exists()) {
+          setProfile(profileSnap.data());
+        }
       } catch (error) {
-        console.error("Error fetching user videos:", error);
+        console.error("Error fetching profile:", error);
       }
       if (!cancelled) setLoading(false);
     };
 
-    fetchUserVideos();
+    fetchData();
     return () => { cancelled = true; };
   }, [params.userId]);
+
+  const handleFollow = async () => {
+    if (!currentUser) return;
+    setFollowLoading(true);
+    const action = isFollowing ? unfollowUser : followUser;
+    const result = await action(params.userId);
+    if (result.success) {
+      setProfile(prev => ({
+        ...prev,
+        followers: isFollowing
+          ? prev.followers.filter(id => id !== currentUser.uid)
+          : [...(prev.followers || []), currentUser.uid],
+      }));
+    }
+    setFollowLoading(false);
+  };
 
   const handleDelete = async (videoId) => {
     if (!confirm('Are you sure you want to delete this video? This cannot be undone.')) return;
@@ -77,68 +132,141 @@ const UserProfilePage = ({ params: paramsPromise }) => {
     setActionLoading(null);
   };
 
-  // For non-owners, filter out hidden videos
   const visibleVideos = isOwner ? videos : videos.filter(v => !v.hidden);
+
+  if (loading) {
+    return <ProfileSkeleton />;
+  }
+
+  const displayName = profile?.displayName || params.userId.substring(0, 8) + '...';
+  const followerCount = profile?.followers?.length || 0;
+  const followingCount = profile?.following?.length || 0;
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-10">
       {/* Profile Header */}
-      <div className="flex items-center justify-between border-b border-white/[0.06] pb-8">
+      <div className="flex flex-col gap-6 border-b border-white/[0.06] pb-8 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-5">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600/20 to-violet-600/20 border border-indigo-500/20">
             <span className="text-xl font-bold text-indigo-400">
-              {params.userId.substring(0, 2).toUpperCase()}
+              {(profile?.displayName || params.userId).substring(0, 2).toUpperCase()}
             </span>
           </div>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold tracking-tight text-white">
-                {isOwner ? 'My Profile' : 'User Profile'}
-              </h1>
+              <h1 className="text-xl font-bold tracking-tight text-white">{displayName}</h1>
               {isOwner && (
                 <span className="rounded-full bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-0.5 text-[0.6875rem] font-medium text-indigo-400">
                   You
                 </span>
               )}
             </div>
-            <p className="mt-0.5 text-sm text-slate-500 font-mono">
-              {currentUser?.email && isOwner ? currentUser.email : `${params.userId.substring(0, 12)}...`}
+            <p className="mt-0.5 text-sm text-slate-500">
+              {profile?.bio || (isOwner ? 'No bio yet — add one in Settings' : 'No bio')}
             </p>
+            {profile?.joinedAt && (
+              <p className="mt-1 text-xs text-slate-600">
+                Joined {formatDate(profile.joinedAt)}
+              </p>
+            )}
           </div>
         </div>
-        {isOwner && (
-          <Link
-            href="/upload"
-            className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-indigo-500"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            Upload Video
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          {isOwner ? (
+            <>
+              <Link
+                href="/settings"
+                className="flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-2.5 text-sm font-medium text-slate-300 transition-all hover:bg-white/[0.06] hover:text-white"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Edit Profile
+              </Link>
+              <Link
+                href="/upload"
+                className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-indigo-500"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                Upload Video
+              </Link>
+            </>
+          ) : currentUser ? (
+            <button
+              onClick={handleFollow}
+              disabled={followLoading}
+              className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium transition-all disabled:opacity-50 ${
+                isFollowing
+                  ? 'border border-white/[0.06] bg-white/[0.02] text-slate-300 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20'
+                  : 'bg-indigo-600 text-white hover:bg-indigo-500'
+              }`}
+            >
+              {followLoading ? (
+                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : isFollowing ? 'Unfollow' : 'Follow'}
+            </button>
+          ) : null}
+        </div>
       </div>
+
+      {/* Stats */}
+      <div className="mt-6 flex items-center gap-6">
+        <div>
+          <span className="text-base font-bold text-white">{visibleVideos.length}</span>
+          <span className="ml-1.5 text-sm text-slate-500">video{visibleVideos.length !== 1 ? 's' : ''}</span>
+        </div>
+        <div className="h-4 w-px bg-white/[0.06]" />
+        <div>
+          <span className="text-base font-bold text-white">{followerCount}</span>
+          <span className="ml-1.5 text-sm text-slate-500">follower{followerCount !== 1 ? 's' : ''}</span>
+        </div>
+        <div className="h-4 w-px bg-white/[0.06]" />
+        <div>
+          <span className="text-base font-bold text-white">{followingCount}</span>
+          <span className="ml-1.5 text-sm text-slate-500">following</span>
+        </div>
+      </div>
+
+      {/* Contact Info (if public and available) */}
+      {profile && (profile.contactEmail || profile.website) && (
+        <div className="mt-4 flex flex-wrap items-center gap-4">
+          {profile.contactEmail && (
+            <span className="flex items-center gap-1.5 text-xs text-slate-500">
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+              </svg>
+              {profile.contactEmail}
+            </span>
+          )}
+          {profile.website && (
+            <a href={profile.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-slate-500 transition-colors hover:text-indigo-400">
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-6.071a4.5 4.5 0 00-6.364 0l-4.5 4.5a4.5 4.5 0 006.364 6.364l1.757-1.757" />
+              </svg>
+              {profile.website.replace(/^https?:\/\//, '')}
+            </a>
+          )}
+        </div>
+      )}
 
       {/* Videos Section */}
       <div className="mt-8">
         <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-white">
-              {isOwner ? 'My Videos' : 'Videos'}
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              {loading ? 'Loading...' : `${visibleVideos.length} video${visibleVideos.length !== 1 ? 's' : ''}${isOwner && videos.some(v => v.hidden) ? ` \u00b7 ${videos.filter(v => v.hidden).length} hidden` : ''}`}
-            </p>
-          </div>
+          <h2 className="text-lg font-semibold text-white">
+            {isOwner ? 'My Videos' : 'Videos'}
+          </h2>
+          {isOwner && videos.some(v => v.hidden) && (
+            <span className="text-xs text-slate-500">{videos.filter(v => v.hidden).length} hidden</span>
+          )}
         </div>
 
-        {loading ? (
-          <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {[...Array(4)].map((_, i) => (
-              <VideoCardSkeleton key={i} />
-            ))}
-          </div>
-        ) : visibleVideos.length > 0 ? (
+        {visibleVideos.length > 0 ? (
           <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {visibleVideos.map(video => (
               <div key={video.id} className="relative">
@@ -200,7 +328,6 @@ const UserProfilePage = ({ params: paramsPromise }) => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
               </svg>
             </div>
-            {/* Placeholder skeleton grid */}
             <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 opacity-40">
               {[...Array(4)].map((_, i) => (
                 <VideoCardSkeleton key={i} />

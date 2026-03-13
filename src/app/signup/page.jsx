@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../../lib/firebase';
+import { auth, db } from '../../lib/firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 
 const SignupPage = () => {
@@ -26,7 +27,30 @@ const SignupPage = () => {
     setLoading(true);
 
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Create user profile document
+      await setDoc(doc(db, 'users', user.uid), {
+        email: user.email,
+        displayName: '',
+        bio: '',
+        contactEmail: '',
+        phone: '',
+        website: '',
+        followers: [],
+        following: [],
+        joinedAt: serverTimestamp(),
+      });
+
+      // Create default user settings document
+      await setDoc(doc(db, 'settings', user.uid), {
+        emailNotifications: true,
+        privateProfile: false,
+        autoplayVideos: true,
+        theme: 'dark',
+      });
+
       router.push('/');
     } catch (err) {
       setError(err.message);
