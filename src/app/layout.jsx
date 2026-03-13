@@ -5,7 +5,7 @@ import Providers from './Providers'
 const inter = Inter({ subsets: ['latin'], display: 'swap' })
 
 export const metadata = {
-  title: 'VideoPlatform',
+  title: 'iF_I',
   description: 'Upload, share, and discover amazing video content.',
 }
 
