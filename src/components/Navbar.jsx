@@ -21,28 +21,46 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="bg-gray-800 p-4">
-      <div className="container mx-auto flex justify-between items-center">
-        <Link href="/" className="text-white text-lg font-bold">
+    <nav className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#0a0a0f]/80 backdrop-blur-2xl backdrop-saturate-150">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
+        <Link href="/" className="text-[1.1rem] font-semibold tracking-tight text-white">
           VideoPlatform
         </Link>
-        <div className="flex space-x-4">
+        <div className="flex items-center gap-2">
           {user ? (
             <>
-              <Link href="/upload" className="text-gray-300 hover:text-white">
+              <Link
+                href="/upload"
+                className="rounded-lg px-4 py-2 text-[0.8125rem] font-medium text-slate-300 transition-colors hover:bg-white/[0.06] hover:text-white"
+              >
                 Upload
               </Link>
-              <button onClick={handleSignOut} className="text-gray-300 hover:text-white">
+              <Link
+                href={`/user/${user.uid}`}
+                className="rounded-lg px-4 py-2 text-[0.8125rem] font-medium text-slate-300 transition-colors hover:bg-white/[0.06] hover:text-white"
+              >
+                Profile
+              </Link>
+              <button
+                onClick={handleSignOut}
+                className="rounded-lg bg-white/[0.06] px-4 py-2 text-[0.8125rem] font-medium text-slate-300 transition-all hover:bg-white/[0.1] hover:text-white"
+              >
                 Sign Out
               </button>
             </>
           ) : (
             <>
-              <Link href="/login" className="text-gray-300 hover:text-white">
+              <Link
+                href="/login"
+                className="rounded-lg px-4 py-2 text-[0.8125rem] font-medium text-slate-300 transition-colors hover:bg-white/[0.06] hover:text-white"
+              >
                 Login
               </Link>
-              <Link href="/signup" className="text-gray-300 hover:text-white">
-                Signup
+              <Link
+                href="/signup"
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-[0.8125rem] font-medium text-white transition-all hover:bg-indigo-500"
+              >
+                Sign Up
               </Link>
             </>
           )}

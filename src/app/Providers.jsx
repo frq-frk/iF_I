@@ -30,7 +30,7 @@ export default function Providers({ children }) {
     <StoreProvider>
       <AuthSync />
       <Navbar />
-      <main className="container mx-auto p-4">{children}</main>
+      <main className="min-h-[calc(100vh-4rem)]">{children}</main>
     </StoreProvider>
   )
 }
