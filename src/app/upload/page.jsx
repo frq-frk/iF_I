@@ -2,19 +2,31 @@
 
 import { useAppSelector } from '../../store/hooks';
 import { selectUser, selectAuthLoading } from '../../store/slices/authSlice';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { storage, db } from '../../lib/firebase';
+import Link from 'next/link';
 
-const UploadPage = () => {
+const UploadInner = () => {
   const user = useAppSelector(selectUser);
   const loading = useAppSelector(selectAuthLoading);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const contestId = searchParams.get('contestId');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState('');
+  const [contest, setContest] = useState(null);
+
+  useEffect(() => {
+    if (contestId) {
+      getDoc(doc(db, 'contests', contestId)).then(snap => {
+        if (snap.exists()) setContest({ id: snap.id, ...snap.data() });
+      });
+    }
+  }, [contestId]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -67,7 +79,7 @@ const UploadPage = () => {
 
       // Save metadata to Firestore
       setProgress('Saving...');
-      await addDoc(collection(db, 'videos'), {
+      const videoDoc = await addDoc(collection(db, 'videos'), {
         title,
         description,
         downloadURL,
@@ -75,9 +87,20 @@ const UploadPage = () => {
         tags: parsedTags,
         authorId: user.uid,
         createdAt: serverTimestamp(),
+        ...(contestId ? { contestId } : {}),
       });
 
-      router.push('/');
+      // If uploading for a contest, create a submission record
+      if (contestId) {
+        await addDoc(collection(db, 'contestSubmissions'), {
+          contestId,
+          videoId: videoDoc.id,
+          userId: user.uid,
+          submittedAt: serverTimestamp(),
+        });
+      }
+
+      router.push(contestId ? `/contest/${contestId}` : '/');
     } catch (err) {
       console.error('Upload failed:', err);
       setError('Failed to upload video. Please try again.');
@@ -117,9 +140,32 @@ const UploadPage = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
             </svg>
           </div>
-          <h1 className="mt-4 text-2xl font-bold tracking-tight text-white">Upload Video</h1>
-          <p className="mt-2 text-sm text-slate-500">Share your content with the community</p>
+          <h1 className="mt-4 text-2xl font-bold tracking-tight text-white">
+            {contest ? 'Submit Contest Entry' : 'Upload Video'}
+          </h1>
+          <p className="mt-2 text-sm text-slate-500">
+            {contest ? `Submitting to: ${contest.title}` : 'Share your content with the community'}
+          </p>
         </div>
+
+        {contest && (
+          <div className="mt-6 rounded-xl border border-indigo-500/20 bg-indigo-500/10 p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <svg className="h-5 w-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172" />
+                </svg>
+                <div>
+                  <p className="text-sm font-medium text-indigo-300">{contest.title}</p>
+                  <p className="text-xs text-indigo-400/60">Contest submission</p>
+                </div>
+              </div>
+              <Link href={`/contest/${contest.id}`} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+                View contest
+              </Link>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-5">
           <div>
@@ -233,4 +279,23 @@ const UploadPage = () => {
   );
 };
 
-export default UploadPage;
+export default function UploadPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-6 py-12">
+        <div className="w-full max-w-lg space-y-6">
+          <div className="h-6 w-40 mx-auto rounded-lg animate-pulse-soft bg-white/[0.06]" />
+          <div className="h-3 w-56 mx-auto rounded-lg animate-pulse-soft bg-white/[0.04]" />
+          <div className="mt-8 space-y-5">
+            <div className="h-12 rounded-xl animate-pulse-soft bg-white/[0.04]" />
+            <div className="h-28 rounded-xl animate-pulse-soft bg-white/[0.04]" />
+            <div className="h-12 rounded-xl animate-pulse-soft bg-white/[0.04]" />
+            <div className="h-12 rounded-xl animate-pulse-soft bg-indigo-600/20" />
+          </div>
+        </div>
+      </div>
+    }>
+      <UploadInner />
+    </Suspense>
+  );
+}

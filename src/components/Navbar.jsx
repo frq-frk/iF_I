@@ -27,6 +27,12 @@ const Navbar = () => {
           iF_I
         </Link>
         <div className="flex items-center gap-2">
+          <Link
+            href="/contests"
+            className="rounded-lg px-4 py-2 text-[0.8125rem] font-medium text-slate-300 transition-colors hover:bg-white/[0.06] hover:text-white"
+          >
+            Contests
+          </Link>
           {user ? (
             <>
               <Link
