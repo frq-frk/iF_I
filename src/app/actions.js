@@ -1,12 +1,11 @@
 'use server'
 
-import { auth, db, storage } from '../lib/firebase';
+import { db, storage } from '../lib/firebase';
 import { ref, deleteObject } from "firebase/storage";
 import { doc, deleteDoc, updateDoc, getDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 
-export async function deleteVideo(videoId) {
-  const user = auth.currentUser;
-  if (!user) {
+export async function deleteVideo(videoId, userId) {
+  if (!userId) {
     return { error: 'You must be logged in.' };
   }
 
@@ -18,7 +17,7 @@ export async function deleteVideo(videoId) {
       return { error: 'Video not found.' };
     }
 
-    if (videoSnap.data().authorId !== user.uid) {
+    if (videoSnap.data().authorId !== userId) {
       return { error: 'You can only delete your own videos.' };
     }
 
@@ -38,9 +37,8 @@ export async function deleteVideo(videoId) {
   }
 }
 
-export async function toggleVideoVisibility(videoId) {
-  const user = auth.currentUser;
-  if (!user) {
+export async function toggleVideoVisibility(videoId, userId) {
+  if (!userId) {
     return { error: 'You must be logged in.' };
   }
 
@@ -52,7 +50,7 @@ export async function toggleVideoVisibility(videoId) {
       return { error: 'Video not found.' };
     }
 
-    if (videoSnap.data().authorId !== user.uid) {
+    if (videoSnap.data().authorId !== userId) {
       return { error: 'You can only modify your own videos.' };
     }
 
@@ -64,18 +62,17 @@ export async function toggleVideoVisibility(videoId) {
   }
 }
 
-export async function followUser(targetUserId) {
-  const user = auth.currentUser;
-  if (!user) return { error: 'You must be logged in.' };
-  if (user.uid === targetUserId) return { error: 'You cannot follow yourself.' };
+export async function followUser(currentUserId, targetUserId) {
+  if (!currentUserId) return { error: 'You must be logged in.' };
+  if (currentUserId === targetUserId) return { error: 'You cannot follow yourself.' };
 
   try {
-    const myRef = doc(db, 'users', user.uid);
+    const myRef = doc(db, 'users', currentUserId);
     const targetRef = doc(db, 'users', targetUserId);
 
     await Promise.all([
       updateDoc(myRef, { following: arrayUnion(targetUserId) }),
-      updateDoc(targetRef, { followers: arrayUnion(user.uid) }),
+      updateDoc(targetRef, { followers: arrayUnion(currentUserId) }),
     ]);
 
     return { success: true };
@@ -84,17 +81,16 @@ export async function followUser(targetUserId) {
   }
 }
 
-export async function unfollowUser(targetUserId) {
-  const user = auth.currentUser;
-  if (!user) return { error: 'You must be logged in.' };
+export async function unfollowUser(currentUserId, targetUserId) {
+  if (!currentUserId) return { error: 'You must be logged in.' };
 
   try {
-    const myRef = doc(db, 'users', user.uid);
+    const myRef = doc(db, 'users', currentUserId);
     const targetRef = doc(db, 'users', targetUserId);
 
     await Promise.all([
       updateDoc(myRef, { following: arrayRemove(targetUserId) }),
-      updateDoc(targetRef, { followers: arrayRemove(user.uid) }),
+      updateDoc(targetRef, { followers: arrayRemove(currentUserId) }),
     ]);
 
     return { success: true };

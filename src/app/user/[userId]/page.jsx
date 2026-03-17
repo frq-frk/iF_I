@@ -4,10 +4,12 @@ import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firesto
 import { db } from '../../../lib/firebase';
 import { use, useEffect, useState } from 'react';
 import VideoCard from '../../../components/VideoCard';
+import ConfirmDialog from '../../../components/ConfirmDialog';
 import Link from 'next/link';
 import { useAppSelector } from '../../../store/hooks';
 import { selectUser } from '../../../store/slices/authSlice';
 import { deleteVideo, toggleVideoVisibility, followUser, unfollowUser } from '../../actions';
+import { toast } from 'sonner';
 
 function VideoCardSkeleton() {
   return (
@@ -64,6 +66,7 @@ const UserProfilePage = ({ params: paramsPromise }) => {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
   const [followLoading, setFollowLoading] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null);
   const currentUser = useAppSelector(selectUser);
   const isOwner = currentUser?.uid === params.userId;
   const isFollowing = profile?.followers?.includes(currentUser?.uid);
@@ -99,7 +102,7 @@ const UserProfilePage = ({ params: paramsPromise }) => {
     if (!currentUser) return;
     setFollowLoading(true);
     const action = isFollowing ? unfollowUser : followUser;
-    const result = await action(params.userId);
+    const result = await action(currentUser.uid, params.userId);
     if (result.success) {
       setProfile(prev => ({
         ...prev,
@@ -107,27 +110,40 @@ const UserProfilePage = ({ params: paramsPromise }) => {
           ? prev.followers.filter(id => id !== currentUser.uid)
           : [...(prev.followers || []), currentUser.uid],
       }));
+    } else {
+      toast.error(result.error);
     }
     setFollowLoading(false);
   };
 
   const handleDelete = async (videoId) => {
-    if (!confirm('Are you sure you want to delete this video? This cannot be undone.')) return;
+    setConfirmDelete(videoId);
+  };
+
+  const confirmDeleteVideo = async () => {
+    const videoId = confirmDelete;
+    setConfirmDelete(null);
     setActionLoading(videoId);
-    const result = await deleteVideo(videoId);
+    const result = await deleteVideo(videoId, currentUser.uid);
     if (result.success) {
       setVideos(prev => prev.filter(v => v.id !== videoId));
+      toast.success('Video deleted');
+    } else {
+      toast.error(result.error);
     }
     setActionLoading(null);
   };
 
   const handleToggleVisibility = async (videoId) => {
     setActionLoading(videoId);
-    const result = await toggleVideoVisibility(videoId);
+    const result = await toggleVideoVisibility(videoId, currentUser.uid);
     if (result.success) {
       setVideos(prev =>
         prev.map(v => v.id === videoId ? { ...v, hidden: result.hidden } : v)
       );
+      toast.success(result.hidden ? 'Video hidden' : 'Video visible');
+    } else {
+      toast.error(result.error);
     }
     setActionLoading(null);
   };
@@ -355,6 +371,16 @@ const UserProfilePage = ({ params: paramsPromise }) => {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        visible={!!confirmDelete}
+        title="Delete Video"
+        message="Are you sure you want to delete this video? This action cannot be undone."
+        confirmLabel="Delete"
+        danger
+        onConfirm={confirmDeleteVideo}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   );
 };
