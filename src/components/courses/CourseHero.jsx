@@ -1,3 +1,5 @@
+'use client'
+
 const levelColors = {
   beginner: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   intermediate: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
@@ -12,7 +14,9 @@ const CourseHero = ({ course }) => {
           <img
             src={course.thumbnail}
             alt={course.title}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover select-none"
+            onContextMenu={(e) => e.preventDefault()}
+            draggable={false}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-indigo-600/20 via-violet-600/10 to-transparent">

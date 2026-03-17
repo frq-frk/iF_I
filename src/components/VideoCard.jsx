@@ -1,3 +1,5 @@
+'use client'
+
 import Link from 'next/link';
 
 const VideoCard = ({ video }) => {
@@ -11,7 +13,9 @@ const VideoCard = ({ video }) => {
             <img
               src={thumbnail}
               alt={video.title}
-              className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
+              className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03] select-none"
+              onContextMenu={(e) => e.preventDefault()}
+              draggable={false}
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-white/[0.03]">

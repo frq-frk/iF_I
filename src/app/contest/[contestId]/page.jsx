@@ -126,7 +126,9 @@ export default function ContestDetailPage({ params }) {
             <img
               src={contest.bannerImage}
               alt={contest.title}
-              className="h-full w-full object-cover"
+              className="h-full w-full object-cover select-none"
+              onContextMenu={(e) => e.preventDefault()}
+              draggable={false}
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-indigo-600/20 via-violet-600/10 to-transparent">

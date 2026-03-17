@@ -1,3 +1,5 @@
+'use client'
+
 import Link from 'next/link';
 
 const levelColors = {
@@ -17,7 +19,9 @@ const CourseCard = ({ course }) => {
             <img
               src={thumbnail}
               alt={course.title}
-              className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
+              className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03] select-none"
+              onContextMenu={(e) => e.preventDefault()}
+              draggable={false}
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-indigo-600/20 via-violet-600/10 to-transparent">

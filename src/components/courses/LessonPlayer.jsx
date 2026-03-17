@@ -8,8 +8,12 @@ const LessonPlayer = ({ lesson }) => {
           <video
             src={lesson.contentURL}
             controls
-            className="h-full w-full"
+            preload="metadata"
             controlsList="nodownload"
+            disablePictureInPicture
+            playsInline
+            onContextMenu={(e) => e.preventDefault()}
+            className="h-full w-full"
           >
             Your browser does not support the video tag.
           </video>

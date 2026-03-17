@@ -70,6 +70,11 @@ const VideoPage = ({ params: paramsPromise }) => {
         <video
           src={video.downloadURL}
           controls
+          preload="metadata"
+          controlsList="nodownload"
+          disablePictureInPicture
+          playsInline
+          onContextMenu={(e) => e.preventDefault()}
           className="aspect-video w-full bg-black"
         />
       </div>
