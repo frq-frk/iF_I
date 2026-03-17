@@ -7,6 +7,7 @@ import StoreProvider from '../store/StoreProvider'
 import { useAppDispatch } from '../store/hooks'
 import { setUser, clearUser } from '../store/slices/authSlice'
 import Navbar from '../components/Navbar'
+import UploadManager from '../components/UploadManager'
 import { Toaster } from 'sonner'
 
 function AuthSync() {
@@ -30,6 +31,7 @@ export default function Providers({ children }) {
   return (
     <StoreProvider>
       <AuthSync />
+      <UploadManager>
       <Toaster
         position="top-right"
         theme="dark"
@@ -46,6 +48,7 @@ export default function Providers({ children }) {
       />
       <Navbar />
       <main className="min-h-[calc(100vh-4rem)]">{children}</main>
+      </UploadManager>
     </StoreProvider>
   )
 }

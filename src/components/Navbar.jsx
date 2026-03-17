@@ -1,15 +1,36 @@
 'use client'
 
+import { useEffect } from 'react';
 import Link from 'next/link';
-import { useAppSelector } from '../store/hooks';
+import { useAppSelector, useAppDispatch } from '../store/hooks';
 import { selectUser } from '../store/slices/authSlice';
+import {
+  selectUploadActive,
+  selectUploadProgress,
+  selectUploadStage,
+  selectUploadFileName,
+  resetUpload,
+} from '../store/slices/uploadSlice';
 import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 
 const Navbar = () => {
   const user = useAppSelector(selectUser);
+  const dispatch = useAppDispatch();
+  const uploadActive = useAppSelector(selectUploadActive);
+  const uploadProgress = useAppSelector(selectUploadProgress);
+  const uploadStage = useAppSelector(selectUploadStage);
+  const uploadFileName = useAppSelector(selectUploadFileName);
   const router = useRouter();
+
+  // Auto-dismiss complete/failed indicator after 3 seconds
+  useEffect(() => {
+    if (uploadStage === 'complete' || uploadStage === 'failed') {
+      const timer = setTimeout(() => dispatch(resetUpload()), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [uploadStage, dispatch]);
 
   const handleSignOut = async () => {
     try {
@@ -41,6 +62,40 @@ const Navbar = () => {
           </Link>
           {user ? (
             <>
+              {/* Upload progress indicator */}
+              {(uploadActive || uploadStage === 'complete' || uploadStage === 'failed') && (
+                <Link
+                  href="/upload"
+                  className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all ${
+                    uploadStage === 'complete'
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                      : uploadStage === 'failed'
+                      ? 'border-red-500/30 bg-red-500/10 text-red-400'
+                      : 'border-indigo-500/20 bg-indigo-500/10 text-indigo-300'
+                  }`}
+                >
+                  {uploadActive && (
+                    <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  )}
+                  {uploadStage === 'complete' && (
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                  {uploadStage === 'failed' && (
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  )}
+                  <span className="max-w-[8rem] truncate">{uploadFileName}</span>
+                  {uploadActive && <span>{uploadProgress}%</span>}
+                  {uploadStage === 'complete' && <span>Done</span>}
+                  {uploadStage === 'failed' && <span>Failed</span>}
+                </Link>
+              )}
               <Link
                 href="/upload"
                 className="rounded-lg px-4 py-2 text-[0.8125rem] font-medium text-slate-300 transition-colors hover:bg-white/[0.06] hover:text-white"

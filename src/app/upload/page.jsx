@@ -2,23 +2,29 @@
 
 import { useAppSelector } from '../../store/hooks';
 import { selectUser, selectAuthLoading } from '../../store/slices/authSlice';
+import {
+  selectUploadActive,
+  selectUploadProgress,
+  selectUploadStage,
+} from '../../store/slices/uploadSlice';
+import { useUploadManager } from '../../components/UploadManager';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
-import { storage, db } from '../../lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import LoadingOverlay from '../../components/LoadingOverlay';
 
 const UploadInner = () => {
   const user = useAppSelector(selectUser);
   const loading = useAppSelector(selectAuthLoading);
+  const uploadActive = useAppSelector(selectUploadActive);
+  const uploadProgress = useAppSelector(selectUploadProgress);
+  const uploadStage = useAppSelector(selectUploadStage);
+  const { beginUpload, cancelUpload } = useUploadManager();
   const router = useRouter();
   const searchParams = useSearchParams();
   const contestId = searchParams.get('contestId');
-  const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState('');
   const [contest, setContest] = useState(null);
 
   useEffect(() => {
@@ -37,7 +43,6 @@ const UploadInner = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setUploading(true);
 
     const formData = new FormData(e.target);
     const title = formData.get('title');
@@ -48,67 +53,22 @@ const UploadInner = () => {
 
     if (!videoFile || videoFile.size === 0) {
       toast.error('Please select a video file.');
-      setUploading(false);
       return;
     }
 
-    try {
-      const timestamp = Date.now();
+    beginUpload({
+      userId: user.uid,
+      title,
+      description,
+      videoFile,
+      thumbnailFile,
+      tags,
+      contestId,
+    });
 
-      // Upload video directly to Firebase Storage from client
-      setProgress('Uploading video...');
-      const videoFileName = `${user.uid}-${timestamp}`;
-      const videoStorageRef = ref(storage, `videos/${videoFileName}`);
-      const videoUpload = await uploadBytes(videoStorageRef, videoFile);
-      const downloadURL = await getDownloadURL(videoUpload.ref);
-
-      // Upload thumbnail if provided
-      let thumbnailURL = null;
-      if (thumbnailFile && thumbnailFile.size > 0) {
-        setProgress('Uploading thumbnail...');
-        const thumbFileName = `${user.uid}-${timestamp}-thumb`;
-        const thumbStorageRef = ref(storage, `thumbnails/${thumbFileName}`);
-        const thumbUpload = await uploadBytes(thumbStorageRef, thumbnailFile);
-        thumbnailURL = await getDownloadURL(thumbUpload.ref);
-      }
-
-      // Parse tags
-      const parsedTags = tags
-        ? tags.split(',').map(t => t.trim()).filter(Boolean)
-        : [];
-
-      // Save metadata to Firestore
-      setProgress('Saving...');
-      const videoDoc = await addDoc(collection(db, 'videos'), {
-        title,
-        description,
-        downloadURL,
-        thumbnailURL,
-        tags: parsedTags,
-        authorId: user.uid,
-        createdAt: serverTimestamp(),
-        ...(contestId ? { contestId } : {}),
-      });
-
-      // If uploading for a contest, create a submission record
-      if (contestId) {
-        await addDoc(collection(db, 'contestSubmissions'), {
-          contestId,
-          videoId: videoDoc.id,
-          userId: user.uid,
-          submittedAt: serverTimestamp(),
-        });
-      }
-
-      toast.success('Video uploaded successfully');
-      router.push(contestId ? `/contest/${contestId}` : '/');
-    } catch (err) {
-      console.error('Upload failed:', err);
-      toast.error('Failed to upload video. Please try again.');
-    } finally {
-      setUploading(false);
-      setProgress('');
-    }
+    // Navigate away — upload continues in background
+    toast.info('Upload started — you can navigate away safely');
+    router.push(contestId ? `/contest/${contestId}` : '/');
   };
 
   if (loading) {
@@ -134,7 +94,6 @@ const UploadInner = () => {
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-6 py-12">
-      <LoadingOverlay visible={uploading} message={progress || 'Uploading...'} />
       <div className="w-full max-w-lg">
         <div className="text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600/10 border border-indigo-500/20">
@@ -169,6 +128,33 @@ const UploadInner = () => {
           </div>
         )}
 
+        {/* Inline progress bar — shown when upload is active */}
+        {uploadActive && (
+          <div className="mt-6 rounded-xl border border-indigo-500/20 bg-white/[0.03] p-4 space-y-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-300 capitalize">
+                {uploadStage === 'video' && 'Uploading video...'}
+                {uploadStage === 'thumbnail' && 'Uploading thumbnail...'}
+                {uploadStage === 'saving' && 'Saving metadata...'}
+              </span>
+              <span className="text-indigo-400 font-medium">{uploadProgress}%</span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-white/[0.06] overflow-hidden">
+              <div
+                className="h-full rounded-full bg-indigo-500 transition-all duration-300 ease-out"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={cancelUpload}
+              className="text-xs text-slate-500 hover:text-red-400 transition-colors"
+            >
+              Cancel upload
+            </button>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="mt-8 space-y-5">
           <div>
             <label htmlFor="title" className="block text-xs font-medium uppercase tracking-wider text-slate-500">
@@ -181,7 +167,7 @@ const UploadInner = () => {
               placeholder="Give your video a title"
               className="mt-2 block w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white placeholder-slate-600 outline-none transition-all focus:border-indigo-500/50 focus:bg-white/[0.05] focus:ring-1 focus:ring-indigo-500/50"
               required
-              disabled={uploading}
+              disabled={uploadActive}
             />
           </div>
           <div>
@@ -195,7 +181,7 @@ const UploadInner = () => {
               className="mt-2 block w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white placeholder-slate-600 outline-none transition-all focus:border-indigo-500/50 focus:bg-white/[0.05] focus:ring-1 focus:ring-indigo-500/50"
               rows="4"
               required
-              disabled={uploading}
+              disabled={uploadActive}
             ></textarea>
           </div>
           <div>
@@ -212,7 +198,7 @@ const UploadInner = () => {
                 type="file"
                 accept="image/*"
                 className="mt-2 block w-full text-sm text-slate-400 file:mr-4 file:rounded-lg file:border-0 file:bg-indigo-600/20 file:px-4 file:py-2 file:text-sm file:font-medium file:text-indigo-400 hover:file:bg-indigo-600/30 file:cursor-pointer file:transition-colors"
-                disabled={uploading}
+                disabled={uploadActive}
               />
               <p className="mt-1.5 text-xs text-slate-600">PNG, JPG, or WebP. Recommended 1280×720</p>
             </div>
@@ -232,7 +218,7 @@ const UploadInner = () => {
                 accept="video/*"
                 className="mt-3 block w-full text-sm text-slate-400 file:mr-4 file:rounded-lg file:border-0 file:bg-indigo-600/20 file:px-4 file:py-2 file:text-sm file:font-medium file:text-indigo-400 hover:file:bg-indigo-600/30 file:cursor-pointer file:transition-colors"
                 required
-                disabled={uploading}
+                disabled={uploadActive}
               />
               <p className="mt-2 text-xs text-slate-600">MP4, WebM, or OGG up to 500MB</p>
             </div>
@@ -247,23 +233,23 @@ const UploadInner = () => {
               type="text"
               placeholder="e.g. music, tutorial, vlog"
               className="mt-2 block w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white placeholder-slate-600 outline-none transition-all focus:border-indigo-500/50 focus:bg-white/[0.05] focus:ring-1 focus:ring-indigo-500/50"
-              disabled={uploading}
+              disabled={uploadActive}
             />
             <p className="mt-1.5 text-xs text-slate-600">Separate tags with commas</p>
           </div>
 
           <button
             type="submit"
-            disabled={uploading}
+            disabled={uploadActive}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-600/20 transition-all hover:bg-indigo-500 hover:shadow-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {uploading ? (
+            {uploadActive ? (
               <>
                 <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                {progress || 'Uploading...'}
+                Uploading...
               </>
             ) : (
               'Upload Video'
