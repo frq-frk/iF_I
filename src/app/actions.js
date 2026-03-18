@@ -2,7 +2,7 @@
 
 import { db, storage } from '../lib/firebase';
 import { ref, deleteObject } from "firebase/storage";
-import { doc, deleteDoc, updateDoc, getDoc, arrayUnion, arrayRemove } from "firebase/firestore";
+import { doc, deleteDoc, updateDoc, getDoc, addDoc, collection, query, where, getDocs, arrayUnion, arrayRemove } from "firebase/firestore";
 
 export async function deleteVideo(videoId, userId) {
   if (!userId) {
@@ -62,39 +62,104 @@ export async function toggleVideoVisibility(videoId, userId) {
   }
 }
 
-export async function followUser(currentUserId, targetUserId) {
+export async function sendConnectionRequest(currentUserId, targetUserId) {
   if (!currentUserId) return { error: 'You must be logged in.' };
-  if (currentUserId === targetUserId) return { error: 'You cannot follow yourself.' };
+  if (currentUserId === targetUserId) return { error: 'You cannot connect with yourself.' };
 
   try {
-    const myRef = doc(db, 'users', currentUserId);
-    const targetRef = doc(db, 'users', targetUserId);
+    // Check if already connected
+    const userSnap = await getDoc(doc(db, 'users', currentUserId));
+    if (userSnap.exists() && userSnap.data().connections?.includes(targetUserId)) {
+      return { error: 'Already connected.' };
+    }
 
-    await Promise.all([
-      updateDoc(myRef, { following: arrayUnion(targetUserId) }),
-      updateDoc(targetRef, { followers: arrayUnion(currentUserId) }),
-    ]);
+    // Check for existing pending request in either direction
+    const existing = await getDocs(query(
+      collection(db, 'connectionRequests'),
+      where('from', '==', currentUserId),
+      where('to', '==', targetUserId),
+    ));
+    if (!existing.empty) return { error: 'Request already sent.' };
 
-    return { success: true };
+    const reverse = await getDocs(query(
+      collection(db, 'connectionRequests'),
+      where('from', '==', targetUserId),
+      where('to', '==', currentUserId),
+    ));
+    if (!reverse.empty) {
+      // They already sent us a request — accept it automatically
+      const reqDoc = reverse.docs[0];
+      await Promise.all([
+        updateDoc(doc(db, 'users', currentUserId), { connections: arrayUnion(targetUserId) }),
+        updateDoc(doc(db, 'users', targetUserId), { connections: arrayUnion(currentUserId) }),
+        deleteDoc(reqDoc.ref),
+      ]);
+      return { success: true, status: 'connected' };
+    }
+
+    await addDoc(collection(db, 'connectionRequests'), {
+      from: currentUserId,
+      to: targetUserId,
+      createdAt: new Date(),
+    });
+
+    return { success: true, status: 'pending' };
   } catch (error) {
-    return { error: 'Failed to follow user.' };
+    return { error: 'Failed to send connection request.' };
   }
 }
 
-export async function unfollowUser(currentUserId, targetUserId) {
+export async function acceptConnectionRequest(currentUserId, requestId) {
   if (!currentUserId) return { error: 'You must be logged in.' };
 
   try {
-    const myRef = doc(db, 'users', currentUserId);
-    const targetRef = doc(db, 'users', targetUserId);
+    const reqRef = doc(db, 'connectionRequests', requestId);
+    const reqSnap = await getDoc(reqRef);
+    if (!reqSnap.exists()) return { error: 'Request not found.' };
+
+    const { from, to } = reqSnap.data();
+    if (to !== currentUserId) return { error: 'Not authorized.' };
 
     await Promise.all([
-      updateDoc(myRef, { following: arrayRemove(targetUserId) }),
-      updateDoc(targetRef, { followers: arrayRemove(currentUserId) }),
+      updateDoc(doc(db, 'users', from), { connections: arrayUnion(to) }),
+      updateDoc(doc(db, 'users', to), { connections: arrayUnion(from) }),
+      deleteDoc(reqRef),
     ]);
 
     return { success: true };
   } catch (error) {
-    return { error: 'Failed to unfollow user.' };
+    return { error: 'Failed to accept request.' };
+  }
+}
+
+export async function rejectConnectionRequest(currentUserId, requestId) {
+  if (!currentUserId) return { error: 'You must be logged in.' };
+
+  try {
+    const reqRef = doc(db, 'connectionRequests', requestId);
+    const reqSnap = await getDoc(reqRef);
+    if (!reqSnap.exists()) return { error: 'Request not found.' };
+
+    if (reqSnap.data().to !== currentUserId) return { error: 'Not authorized.' };
+
+    await deleteDoc(reqRef);
+    return { success: true };
+  } catch (error) {
+    return { error: 'Failed to reject request.' };
+  }
+}
+
+export async function removeConnection(currentUserId, targetUserId) {
+  if (!currentUserId) return { error: 'You must be logged in.' };
+
+  try {
+    await Promise.all([
+      updateDoc(doc(db, 'users', currentUserId), { connections: arrayRemove(targetUserId) }),
+      updateDoc(doc(db, 'users', targetUserId), { connections: arrayRemove(currentUserId) }),
+    ]);
+
+    return { success: true };
+  } catch (error) {
+    return { error: 'Failed to remove connection.' };
   }
 }

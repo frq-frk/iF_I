@@ -8,7 +8,7 @@ import ConfirmDialog from '../../../components/ConfirmDialog';
 import Link from 'next/link';
 import { useAppSelector } from '../../../store/hooks';
 import { selectUser } from '../../../store/slices/authSlice';
-import { deleteVideo, toggleVideoVisibility, followUser, unfollowUser } from '../../actions';
+import { deleteVideo, toggleVideoVisibility, sendConnectionRequest, removeConnection, acceptConnectionRequest, rejectConnectionRequest } from '../../actions';
 import { toast } from 'sonner';
 
 function VideoCardSkeleton() {
@@ -65,11 +65,12 @@ const UserProfilePage = ({ params: paramsPromise }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
-  const [followLoading, setFollowLoading] = useState(false);
+  const [connectionLoading, setConnectionLoading] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState(null); // 'connected' | 'pending-sent' | 'pending-received' | null
+  const [pendingRequestId, setPendingRequestId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const currentUser = useAppSelector(selectUser);
   const isOwner = currentUser?.uid === params.userId;
-  const isFollowing = profile?.followers?.includes(currentUser?.uid);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,10 +84,39 @@ const UserProfilePage = ({ params: paramsPromise }) => {
 
         if (cancelled) return;
 
-        setVideos(videosSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        const authorName = profileSnap.exists() ? profileSnap.data().displayName || null : null;
+        setVideos(videosSnap.docs.map(d => ({ id: d.id, ...d.data(), authorName })));
 
         if (profileSnap.exists()) {
           setProfile(profileSnap.data());
+        }
+
+        // Check connection status
+        if (currentUser && currentUser.uid !== params.userId) {
+          const isConnected = profileSnap.exists() && profileSnap.data().connections?.includes(currentUser.uid);
+          if (isConnected) {
+            setConnectionStatus('connected');
+          } else {
+            // Check for pending requests
+            const sentSnap = await getDocs(query(
+              collection(db, 'connectionRequests'),
+              where('from', '==', currentUser.uid),
+              where('to', '==', params.userId),
+            ));
+            if (!sentSnap.empty) {
+              setConnectionStatus('pending-sent');
+            } else {
+              const receivedSnap = await getDocs(query(
+                collection(db, 'connectionRequests'),
+                where('from', '==', params.userId),
+                where('to', '==', currentUser.uid),
+              ));
+              if (!receivedSnap.empty) {
+                setConnectionStatus('pending-received');
+                setPendingRequestId(receivedSnap.docs[0].id);
+              }
+            }
+          }
         }
       } catch (error) {
         console.error("Error fetching profile:", error);
@@ -96,24 +126,71 @@ const UserProfilePage = ({ params: paramsPromise }) => {
 
     fetchData();
     return () => { cancelled = true; };
-  }, [params.userId]);
+  }, [params.userId, currentUser]);
 
-  const handleFollow = async () => {
+  const handleConnect = async () => {
     if (!currentUser) return;
-    setFollowLoading(true);
-    const action = isFollowing ? unfollowUser : followUser;
-    const result = await action(currentUser.uid, params.userId);
+    setConnectionLoading(true);
+    const result = await sendConnectionRequest(currentUser.uid, params.userId);
     if (result.success) {
-      setProfile(prev => ({
-        ...prev,
-        followers: isFollowing
-          ? prev.followers.filter(id => id !== currentUser.uid)
-          : [...(prev.followers || []), currentUser.uid],
-      }));
+      if (result.status === 'connected') {
+        setConnectionStatus('connected');
+        setProfile(prev => ({ ...prev, connections: [...(prev?.connections || []), currentUser.uid] }));
+        toast.success('Connected!');
+      } else {
+        setConnectionStatus('pending-sent');
+        toast.success('Connection request sent');
+      }
     } else {
       toast.error(result.error);
     }
-    setFollowLoading(false);
+    setConnectionLoading(false);
+  };
+
+  const handleAcceptConnection = async () => {
+    if (!currentUser || !pendingRequestId) return;
+    setConnectionLoading(true);
+    const result = await acceptConnectionRequest(currentUser.uid, pendingRequestId);
+    if (result.success) {
+      setConnectionStatus('connected');
+      setProfile(prev => ({ ...prev, connections: [...(prev?.connections || []), currentUser.uid] }));
+      setPendingRequestId(null);
+      toast.success('Connection accepted!');
+    } else {
+      toast.error(result.error);
+    }
+    setConnectionLoading(false);
+  };
+
+  const handleRejectConnection = async () => {
+    if (!currentUser || !pendingRequestId) return;
+    setConnectionLoading(true);
+    const result = await rejectConnectionRequest(currentUser.uid, pendingRequestId);
+    if (result.success) {
+      setConnectionStatus(null);
+      setPendingRequestId(null);
+      toast.success('Request declined');
+    } else {
+      toast.error(result.error);
+    }
+    setConnectionLoading(false);
+  };
+
+  const handleDisconnect = async () => {
+    if (!currentUser) return;
+    setConnectionLoading(true);
+    const result = await removeConnection(currentUser.uid, params.userId);
+    if (result.success) {
+      setConnectionStatus(null);
+      setProfile(prev => ({
+        ...prev,
+        connections: (prev?.connections || []).filter(id => id !== currentUser.uid),
+      }));
+      toast.success('Connection removed');
+    } else {
+      toast.error(result.error);
+    }
+    setConnectionLoading(false);
   };
 
   const handleDelete = async (videoId) => {
@@ -155,8 +232,7 @@ const UserProfilePage = ({ params: paramsPromise }) => {
   }
 
   const displayName = profile?.displayName || params.userId.substring(0, 8) + '...';
-  const followerCount = profile?.followers?.length || 0;
-  const followingCount = profile?.following?.length || 0;
+  const connectionCount = profile?.connections?.length || 0;
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-10">
@@ -211,22 +287,76 @@ const UserProfilePage = ({ params: paramsPromise }) => {
               </Link>
             </>
           ) : currentUser ? (
-            <button
-              onClick={handleFollow}
-              disabled={followLoading}
-              className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium transition-all disabled:opacity-50 ${
-                isFollowing
-                  ? 'border border-white/[0.06] bg-white/[0.02] text-slate-300 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20'
-                  : 'bg-indigo-600 text-white hover:bg-indigo-500'
-              }`}
-            >
-              {followLoading ? (
-                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-              ) : isFollowing ? 'Unfollow' : 'Follow'}
-            </button>
+            <div className="flex items-center gap-2">
+              {connectionStatus === 'connected' ? (
+                <button
+                  onClick={handleDisconnect}
+                  disabled={connectionLoading}
+                  className="flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-2.5 text-sm font-medium text-slate-300 transition-all hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 disabled:opacity-50"
+                >
+                  {connectionLoading ? (
+                    <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    <>
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-6.071a4.5 4.5 0 00-6.364 0l-4.5 4.5a4.5 4.5 0 006.364 6.364l1.757-1.757" />
+                      </svg>
+                      Connected
+                    </>
+                  )}
+                </button>
+              ) : connectionStatus === 'pending-sent' ? (
+                <button
+                  disabled
+                  className="flex items-center gap-2 rounded-xl border border-yellow-500/20 bg-yellow-500/10 px-5 py-2.5 text-sm font-medium text-yellow-400 cursor-not-allowed"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Pending
+                </button>
+              ) : connectionStatus === 'pending-received' ? (
+                <>
+                  <button
+                    onClick={handleAcceptConnection}
+                    disabled={connectionLoading}
+                    className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition-all hover:bg-indigo-500 disabled:opacity-50"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={handleRejectConnection}
+                    disabled={connectionLoading}
+                    className="flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-2.5 text-sm font-medium text-slate-400 transition-all hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
+                  >
+                    Decline
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={handleConnect}
+                  disabled={connectionLoading}
+                  className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition-all hover:bg-indigo-500 disabled:opacity-50"
+                >
+                  {connectionLoading ? (
+                    <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    <>
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
+                      </svg>
+                      Connect
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
           ) : null}
         </div>
       </div>
@@ -239,13 +369,8 @@ const UserProfilePage = ({ params: paramsPromise }) => {
         </div>
         <div className="h-4 w-px bg-white/[0.06]" />
         <div>
-          <span className="text-base font-bold text-white">{followerCount}</span>
-          <span className="ml-1.5 text-sm text-slate-500">follower{followerCount !== 1 ? 's' : ''}</span>
-        </div>
-        <div className="h-4 w-px bg-white/[0.06]" />
-        <div>
-          <span className="text-base font-bold text-white">{followingCount}</span>
-          <span className="ml-1.5 text-sm text-slate-500">following</span>
+          <span className="text-base font-bold text-white">{connectionCount}</span>
+          <span className="ml-1.5 text-sm text-slate-500">connection{connectionCount !== 1 ? 's' : ''}</span>
         </div>
       </div>
 

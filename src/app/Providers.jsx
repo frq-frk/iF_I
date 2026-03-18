@@ -2,7 +2,8 @@
 
 import { useEffect } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
-import { auth } from '../lib/firebase'
+import { doc, getDoc } from 'firebase/firestore'
+import { auth, db } from '../lib/firebase'
 import StoreProvider from '../store/StoreProvider'
 import { useAppDispatch } from '../store/hooks'
 import { setUser, clearUser } from '../store/slices/authSlice'
@@ -14,9 +15,14 @@ function AuthSync() {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        dispatch(setUser({ uid: user.uid, email: user.email }));
+        let displayName = null;
+        try {
+          const snap = await getDoc(doc(db, 'users', user.uid));
+          if (snap.exists()) displayName = snap.data().displayName || null;
+        } catch {}
+        dispatch(setUser({ uid: user.uid, email: user.email, displayName }));
       } else {
         dispatch(clearUser());
       }

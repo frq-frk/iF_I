@@ -24,6 +24,7 @@ function VideoSkeleton() {
 const VideoPage = ({ params: paramsPromise }) => {
   const params = use(paramsPromise);
   const [video, setVideo] = useState(null);
+  const [authorName, setAuthorName] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,7 +33,15 @@ const VideoPage = ({ params: paramsPromise }) => {
         const docRef = doc(db, "videos", params.id);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          setVideo({ id: docSnap.id, ...docSnap.data() });
+          const data = { id: docSnap.id, ...docSnap.data() };
+          setVideo(data);
+          // Fetch author display name
+          if (data.authorId) {
+            const userSnap = await getDoc(doc(db, 'users', data.authorId));
+            if (userSnap.exists()) {
+              setAuthorName(userSnap.data().displayName || null);
+            }
+          }
         }
       } catch (error) {
         console.error("Error fetching video:", error);
@@ -86,7 +95,7 @@ const VideoPage = ({ params: paramsPromise }) => {
             href={`/user/${video.authorId}`}
             className="mt-2 inline-block text-sm font-medium text-slate-500 transition-colors hover:text-indigo-400"
           >
-            {video.authorId.substring(0, 8)}...
+            {authorName || video.authorName || video.authorId.substring(0, 8) + '...'}
           </Link>
         )}
         <div className="mt-4 border-t border-white/[0.06] pt-4">

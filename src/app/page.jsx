@@ -1,4 +1,4 @@
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import VideoCard from '../components/VideoCard';
 import Link from 'next/link';
@@ -24,11 +24,23 @@ async function getVideos() {
     const videosCollection = collection(db, 'videos');
     const q = query(videosCollection, orderBy('createdAt', 'desc'));
     const querySnapshot = await getDocs(q);
-    const videos = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-    return videos.filter(v => !v.hidden);
+    const videos = querySnapshot.docs.map(d => ({
+      id: d.id,
+      ...d.data(),
+    })).filter(v => !v.hidden);
+
+    // Batch-fetch author display names
+    const authorIds = [...new Set(videos.map(v => v.authorId).filter(Boolean))];
+    const profileMap = {};
+    await Promise.all(
+      authorIds.map(async (uid) => {
+        try {
+          const snap = await getDoc(doc(db, 'users', uid));
+          if (snap.exists()) profileMap[uid] = snap.data().displayName || null;
+        } catch {}
+      })
+    );
+    return videos.map(v => ({ ...v, authorName: profileMap[v.authorId] || null }));
   } catch (error) {
     console.error("Error fetching videos: ", error);
     return [];

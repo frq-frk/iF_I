@@ -90,7 +90,7 @@ export default function UploadManager({ children }) {
     });
   }, [dispatch, resetStallTimer, clearStallTimer]);
 
-  const beginUpload = useCallback(async ({ userId, title, description, videoFile, thumbnailFile, tags, contestId }) => {
+  const beginUpload = useCallback(async ({ userId, authorName, title, description, videoFile, thumbnailFile, tags, contestId }) => {
     if (active) {
       toast.error('An upload is already in progress');
       return;
@@ -130,6 +130,7 @@ export default function UploadManager({ children }) {
         thumbnailURL,
         tags: parsedTags,
         authorId: userId,
+        authorName: authorName || null,
         createdAt: serverTimestamp(),
         ...(contestId ? { contestId } : {}),
       });

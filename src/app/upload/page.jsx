@@ -58,6 +58,7 @@ const UploadInner = () => {
 
     beginUpload({
       userId: user.uid,
+      authorName: user.displayName,
       title,
       description,
       videoFile,

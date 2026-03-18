@@ -60,7 +60,7 @@ const VideoCard = ({ video }) => {
           href={`/user/${video.authorId}`}
           className="text-xs font-medium text-slate-500 transition-colors hover:text-indigo-400"
         >
-          {video.authorId.substring(0, 8)}...
+          {video.authorName || video.authorId.substring(0, 8) + '...'}
         </Link>
       </div>
     </div>

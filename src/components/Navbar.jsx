@@ -60,6 +60,12 @@ const Navbar = () => {
           >
             Learn
           </Link>
+          <Link
+            href="/discussions"
+            className="rounded-lg px-4 py-2 text-[0.8125rem] font-medium text-slate-300 transition-colors hover:bg-white/[0.06] hover:text-white"
+          >
+            Discuss
+          </Link>
           {user ? (
             <>
               {/* Upload progress indicator */}
