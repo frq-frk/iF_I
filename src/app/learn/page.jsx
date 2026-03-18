@@ -24,7 +24,14 @@ async function getCourses() {
     const coursesCollection = collection(db, 'courses');
     const q = query(coursesCollection, orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt ? data.createdAt.toMillis() : null,
+      };
+    });
   } catch (error) {
     console.error('Error fetching courses:', error);
     return [];

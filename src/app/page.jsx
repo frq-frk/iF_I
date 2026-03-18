@@ -40,7 +40,11 @@ async function getVideos() {
         } catch {}
       })
     );
-    return videos.map(v => ({ ...v, authorName: profileMap[v.authorId] || null }));
+    return videos.map(v => ({
+      ...v,
+      authorName: profileMap[v.authorId] || null,
+      createdAt: v.createdAt?.toMillis?.() ?? v.createdAt ?? null,
+    }));
   } catch (error) {
     console.error("Error fetching videos: ", error);
     return [];

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAppSelector, useAppDispatch } from '../store/hooks';
 import { selectUser } from '../store/slices/authSlice';
@@ -11,8 +11,9 @@ import {
   selectUploadFileName,
   resetUpload,
 } from '../store/slices/uploadSlice';
-import { auth } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 
 const Navbar = () => {
@@ -23,6 +24,18 @@ const Navbar = () => {
   const uploadStage = useAppSelector(selectUploadStage);
   const uploadFileName = useAppSelector(selectUploadFileName);
   const router = useRouter();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  // Real-time listener for incoming connection requests
+  useEffect(() => {
+    if (!user) { setPendingCount(0); return; }
+    const q = query(
+      collection(db, 'connectionRequests'),
+      where('to', '==', user.uid),
+    );
+    const unsub = onSnapshot(q, (snap) => setPendingCount(snap.size), () => setPendingCount(0));
+    return unsub;
+  }, [user]);
 
   // Auto-dismiss complete/failed indicator after 3 seconds
   useEffect(() => {
@@ -109,6 +122,23 @@ const Navbar = () => {
                 Upload
               </Link>
               <div className="flex items-center rounded-xl border border-white/[0.06] bg-white/[0.02] p-1 gap-0.5">
+                <Link
+                  href="/connections"
+                  className="group relative rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white"
+                  title="Connections"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                  </svg>
+                  {pendingCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-indigo-600 px-1 text-[0.5625rem] font-bold text-white">
+                      {pendingCount > 9 ? '9+' : pendingCount}
+                    </span>
+                  )}
+                  <span className="pointer-events-none absolute -bottom-8 left-1/2 -translate-x-1/2 rounded-md bg-white/[0.1] px-2 py-1 text-[0.6875rem] text-slate-300 opacity-0 backdrop-blur-md transition-opacity group-hover:opacity-100 whitespace-nowrap">
+                    Connections
+                  </span>
+                </Link>
                 <Link
                   href={`/user/${user.uid}`}
                   className="group relative rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white"
