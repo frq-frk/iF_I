@@ -36,10 +36,19 @@ const CourseCard = ({ course }) => {
               {course.duration}
             </div>
           )}
-          <div className="absolute bottom-2 left-2">
+          <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
             <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[0.625rem] font-medium capitalize ${levelColors[course.level] || levelColors.beginner}`}>
               {course.level}
             </span>
+            {course.price && course.price > 0 ? (
+              <span className="inline-flex items-center rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[0.625rem] font-semibold text-indigo-400">
+                ₹{course.price}
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[0.625rem] font-medium text-emerald-400">
+                Free
+              </span>
+            )}
           </div>
         </div>
         <div className="p-4">

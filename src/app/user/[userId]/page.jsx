@@ -10,6 +10,8 @@ import { useAppSelector } from '../../../store/hooks';
 import { selectUser } from '../../../store/slices/authSlice';
 import { deleteVideo, toggleVideoVisibility, sendConnectionRequest, removeConnection, acceptConnectionRequest, rejectConnectionRequest } from '../../actions';
 import { toast } from 'sonner';
+import BadgeGrid from '../../../components/BadgeGrid';
+import { computeBadgesForUser } from '../../../lib/computeBadges';
 
 function VideoCardSkeleton() {
   return (
@@ -69,6 +71,8 @@ const UserProfilePage = ({ params: paramsPromise }) => {
   const [connectionStatus, setConnectionStatus] = useState(null); // 'connected' | 'pending-sent' | 'pending-received' | null
   const [pendingRequestId, setPendingRequestId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [badges, setBadges] = useState([]);
+  const [badgesLoading, setBadgesLoading] = useState(true);
   const currentUser = useAppSelector(selectUser);
   const isOwner = currentUser?.uid === params.userId;
 
@@ -118,6 +122,10 @@ const UserProfilePage = ({ params: paramsPromise }) => {
             }
           }
         }
+        // Compute badges
+        computeBadgesForUser(params.userId).then(({ earned }) => {
+          if (!cancelled) { setBadges(earned); setBadgesLoading(false); }
+        }).catch(() => { if (!cancelled) setBadgesLoading(false); });
       } catch (error) {
         console.error("Error fetching profile:", error);
       }
@@ -372,6 +380,12 @@ const UserProfilePage = ({ params: paramsPromise }) => {
           <span className="text-base font-bold text-white">{connectionCount}</span>
           <span className="ml-1.5 text-sm text-slate-500">connection{connectionCount !== 1 ? 's' : ''}</span>
         </div>
+      </div>
+
+      {/* Badges */}
+      <div className="mt-6">
+        <h2 className="text-sm font-semibold text-white mb-3">Badges</h2>
+        <BadgeGrid earned={badges} loading={badgesLoading} />
       </div>
 
       {/* Contact Info (if public and available) */}

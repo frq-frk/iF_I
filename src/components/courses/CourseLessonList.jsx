@@ -1,14 +1,34 @@
 import Link from 'next/link';
 
-const CourseLessonList = ({ lessons, courseId }) => {
+const FREE_PREVIEW_COUNT = 2;
+
+const CourseLessonList = ({ lessons, courseId, isPaid = false, purchased = false }) => {
   return (
     <div className="space-y-1">
-      {lessons.map((lesson, index) => (
-        <Link
-          key={lesson.id}
-          href={`/course/${courseId}/lesson/${lesson.id}`}
-          className="flex items-center gap-4 rounded-xl px-4 py-3 transition-all hover:bg-white/[0.04]"
-        >
+      {lessons.map((lesson, index) => {
+        const locked = isPaid && !purchased && index >= FREE_PREVIEW_COUNT;
+
+        return locked ? (
+          <div
+            key={lesson.id}
+            className="flex items-center gap-4 rounded-xl px-4 py-3 opacity-50 cursor-not-allowed"
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-xs font-medium text-slate-400">
+              <svg className="h-3.5 w-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+              </svg>
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-slate-500 truncate">{lesson.title}</p>
+              <p className="mt-0.5 text-xs text-slate-600">Purchase to unlock</p>
+            </div>
+          </div>
+        ) : (
+          <Link
+            key={lesson.id}
+            href={`/course/${courseId}/lesson/${lesson.id}`}
+            className="flex items-center gap-4 rounded-xl px-4 py-3 transition-all hover:bg-white/[0.04]"
+          >
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-xs font-medium text-slate-400">
             {index + 1}
           </span>
@@ -60,7 +80,8 @@ const CourseLessonList = ({ lessons, courseId }) => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.25 4.5l7.5 7.5-7.5 7.5" />
           </svg>
         </Link>
-      ))}
+        );
+      })}
     </div>
   );
 };

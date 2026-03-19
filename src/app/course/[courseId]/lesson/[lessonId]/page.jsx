@@ -6,6 +6,9 @@ import { db } from '../../../../../lib/firebase';
 import CourseSidebar from '../../../../../components/courses/CourseSidebar';
 import LessonPlayer from '../../../../../components/courses/LessonPlayer';
 import LessonNavigation from '../../../../../components/courses/LessonNavigation';
+import { hasPurchased } from '../../../../../lib/checkPurchase';
+import { useAppSelector } from '../../../../../store/hooks';
+import { selectUser } from '../../../../../store/slices/authSlice';
 import Link from 'next/link';
 
 function LessonSkeleton() {
@@ -29,18 +32,22 @@ function LessonSkeleton() {
 
 export default function LessonPage({ params }) {
   const { courseId, lessonId } = use(params);
+  const user = useAppSelector(selectUser);
   const [course, setCourse] = useState(null);
   const [lessons, setLessons] = useState([]);
   const [lesson, setLesson] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [locked, setLocked] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
       try {
         // Fetch course
         const courseSnap = await getDoc(doc(db, 'courses', courseId));
+        let courseData = null;
         if (courseSnap.exists()) {
-          setCourse({ id: courseSnap.id, ...courseSnap.data() });
+          courseData = { id: courseSnap.id, ...courseSnap.data() };
+          setCourse(courseData);
         }
 
         // Fetch all lessons for this course
@@ -56,6 +63,15 @@ export default function LessonPage({ params }) {
         // Find current lesson
         const current = allLessons.find(l => l.id === lessonId);
         setLesson(current || null);
+
+        // Check if this lesson is locked (paid course, not purchased, beyond free preview)
+        if (courseData?.price > 0 && current) {
+          const currentIdx = allLessons.findIndex(l => l.id === lessonId);
+          if (currentIdx >= 2) {
+            const owned = user?.uid ? await hasPurchased(user.uid, courseId) : false;
+            setLocked(!owned);
+          }
+        }
       } catch (error) {
         console.error('Error fetching lesson:', error);
       } finally {
@@ -63,7 +79,7 @@ export default function LessonPage({ params }) {
       }
     }
     fetchData();
-  }, [courseId, lessonId]);
+  }, [courseId, lessonId, user?.uid]);
 
   if (loading) return <LessonSkeleton />;
 
@@ -89,6 +105,30 @@ export default function LessonPage({ params }) {
   const currentIndex = lessons.findIndex(l => l.id === lessonId);
   const prevLesson = currentIndex > 0 ? lessons[currentIndex - 1] : null;
   const nextLesson = currentIndex < lessons.length - 1 ? lessons[currentIndex + 1] : null;
+
+  if (locked) {
+    return (
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-6">
+        <div className="text-center animate-fade-in max-w-md">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10 border border-amber-500/20">
+            <svg className="h-7 w-7 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+            </svg>
+          </div>
+          <h2 className="mt-4 text-xl font-bold text-white">Lesson Locked</h2>
+          <p className="mt-2 text-sm text-slate-400">
+            Purchase this course to access all lessons. The first 2 lessons are free to preview.
+          </p>
+          {course?.price && (
+            <p className="mt-2 text-lg font-semibold text-indigo-400">₹{course.price}</p>
+          )}
+          <Link href={`/course/${courseId}`} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/20 transition-all hover:bg-indigo-500 hover:shadow-indigo-500/30">
+            Go to Course Page
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8 animate-fade-in">

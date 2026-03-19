@@ -5,6 +5,10 @@ import { doc, getDoc, collection, query, where, getDocs, orderBy } from 'firebas
 import { db } from '../../../lib/firebase';
 import CourseHero from '../../../components/courses/CourseHero';
 import CourseLessonList from '../../../components/courses/CourseLessonList';
+import PurchaseButton from '../../../components/PurchaseButton';
+import { hasPurchased } from '../../../lib/checkPurchase';
+import { useAppSelector } from '../../../store/hooks';
+import { selectUser } from '../../../store/slices/authSlice';
 import Link from 'next/link';
 
 function DetailSkeleton() {
@@ -30,9 +34,11 @@ function DetailSkeleton() {
 
 export default function CourseDetailPage({ params }) {
   const { courseId } = use(params);
+  const user = useAppSelector(selectUser);
   const [course, setCourse] = useState(null);
   const [lessons, setLessons] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [purchased, setPurchased] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -43,7 +49,8 @@ export default function CourseDetailPage({ params }) {
           setLoading(false);
           return;
         }
-        setCourse({ id: courseSnap.id, ...courseSnap.data() });
+        const courseData = { id: courseSnap.id, ...courseSnap.data() };
+        setCourse(courseData);
 
         const lessonsQuery = query(
           collection(db, 'lessons'),
@@ -52,6 +59,12 @@ export default function CourseDetailPage({ params }) {
         );
         const lessonsSnap = await getDocs(lessonsQuery);
         setLessons(lessonsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+        // Check purchase status for paid courses
+        if (courseData.price && courseData.price > 0 && user?.uid) {
+          const owned = await hasPurchased(user.uid, courseId);
+          setPurchased(owned);
+        }
       } catch (error) {
         console.error('Error fetching course:', error);
       } finally {
@@ -59,7 +72,7 @@ export default function CourseDetailPage({ params }) {
       }
     }
     fetchData();
-  }, [courseId]);
+  }, [courseId, user?.uid]);
 
   if (loading) return <DetailSkeleton />;
 
@@ -83,10 +96,44 @@ export default function CourseDetailPage({ params }) {
   }
 
   const firstLesson = lessons[0];
+  const isPaid = course.price && course.price > 0;
+  const isLocked = isPaid && !purchased;
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-12 animate-fade-in">
       <CourseHero course={course} />
+
+      {/* Price banner for paid courses */}
+      {isPaid && (
+        <div className="mt-6 flex items-center gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-6 py-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl font-bold text-white">₹{course.price}</span>
+              {purchased ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 text-xs font-medium text-emerald-400">
+                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  Purchased
+                </span>
+              ) : (
+                <span className="text-sm text-slate-400">One-time purchase</span>
+              )}
+            </div>
+            {!purchased && (
+              <p className="mt-1 text-xs text-slate-500">First {Math.min(2, lessons.length)} lessons are free to preview</p>
+            )}
+          </div>
+          {!purchased && user && (
+            <PurchaseButton
+              courseId={course.id}
+              userId={user.uid}
+              price={course.price}
+              courseTitle={course.title}
+            />
+          )}
+        </div>
+      )}
 
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-3">
         {/* Left — Description */}
@@ -117,7 +164,7 @@ export default function CourseDetailPage({ params }) {
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z" />
               </svg>
-              Start Course
+              {isLocked ? 'Preview Course' : 'Start Course'}
             </Link>
           )}
         </div>
@@ -134,7 +181,7 @@ export default function CourseDetailPage({ params }) {
               </div>
             </div>
             <div className="p-2">
-              <CourseLessonList lessons={lessons} courseId={course.id} />
+              <CourseLessonList lessons={lessons} courseId={course.id} isPaid={isPaid} purchased={purchased} />
             </div>
           </div>
         </div>
